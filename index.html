@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agency World</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%;height:100%;overflow:hidden;background:#06040E; }
+canvas { display:block;width:100vw;height:100vh; }
+
+#panel {
+  position:fixed;right:-390px;top:0;width:356px;height:100vh;
+  background:rgba(6,4,14,0.97);border-left:1px solid rgba(180,130,50,0.12);
+  backdrop-filter:blur(20px);transition:right .4s cubic-bezier(.16,1,.3,1);
+  padding:36px 26px;z-index:100;overflow-y:auto;font-family:'Courier New',monospace;
+}
+#panel.open { right:0; }
+.pc { position:absolute;top:14px;right:16px;background:none;border:none;color:#2A1808;font-size:18px;cursor:pointer; }
+.pc:hover { color:#C89050; }
+.pn { font-size:17px;font-weight:bold;color:#D4A840;letter-spacing:2px;margin-bottom:3px; }
+.ps { font-size:10px;color:#3A2810;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px; }
+.pb { display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;margin-bottom:20px; }
+.bon { background:rgba(37,211,102,.08);color:#25D366;border:1px solid #25D36633; }
+.bid { background:rgba(180,140,40,.08);color:#C89A28;border:1px solid #C89A2833; }
+.bpr { background:rgba(200,130,40,.08);color:#C88228;border:1px solid #C8822833; }
+.bd { width:6px;height:6px;border-radius:50%;background:currentColor; }
+.psec { font-size:9px;color:#2A1808;letter-spacing:3px;text-transform:uppercase;margin:14px 0 6px; }
+.pr { font-size:13px;color:#6A5030;line-height:1.7; }
+.pdiv { border:none;border-top:1px solid #100804;margin:16px 0; }
+.pts { display:flex;flex-wrap:wrap;gap:5px; }
+.pt { font-size:10px;padding:3px 9px;background:rgba(180,130,50,.04);border:1px solid rgba(180,130,50,.10);border-radius:4px;color:#4A3018; }
+
+#legend {
+  position:fixed;bottom:16px;left:14px;z-index:10;
+  background:rgba(6,4,14,.90);border:1px solid rgba(180,130,50,.08);
+  padding:8px 16px;border-radius:5px;pointer-events:none;font-family:'Courier New',monospace;
+  display:flex;gap:20px;align-items:center;
+}
+.lr { display:flex;align-items:center;gap:7px;font-size:9.5px;color:#3A2810;letter-spacing:1px; }
+.ld { width:24px;height:2.5px;border-radius:2px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel"><button class="pc" onclick="closePanel()">✕</button><div id="pc"></div></div>
+<div id="legend">
+  <div class="lr"><div class="ld" style="background:#25D366"></div>WHATSAPP</div>
+  <div class="lr"><div class="ld" style="background:#FF44AA"></div>EMAIL</div>
+  <div class="lr"><div class="ld" style="background:#CC44FF"></div>CONTENIDO</div>
+  <div class="lr"><div class="ld" style="background:#E8720C"></div>HUMANOS</div>
+</div>
+
+<script>
+'use strict';
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+const RW=1400, RH=800;
+let SC=1, OX=0, OY=0;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  SC = Math.min(W/RW, H/RH);
+  OX = (W - RW*SC)/2;
+  OY = (H - RH*SC)/2;
+  buildHits();
+}
+window.addEventListener('resize', resize);
+
+// ── Agents ──────────────────────────────────────────────────────────────────
+const AGENTS = [
+  { id:'manager',  label:'MANAGER AI',  sub:'Orchestrator',      color:'#E8720C', x:700, y:248, isManager:true, status:'online',
+    role:'Orchestrates all agents. Routes tasks from Diego & Nelson to the right agent based on priority.',
+    tools:['task-routing','agent-monitor','priority-queue','status-reports'] },
+  { id:'whatsapp', label:'WHATSAPP',    sub:'WhatsApp AI',        color:'#25D366', x:112, y:538, status:'online',
+    role:'Client messaging, lead qualification and follow-up sequences via WhatsApp Business API.',
+    tools:['whatsapp-business-api','lead-tracking','auto-followup','templates'] },
+  { id:'email',    label:'EMAIL AI',    sub:'Email Automation',   color:'#FF44AA', x:538, y:605, status:'online',
+    role:'Email automation, drip sequences and campaign analytics via SendGrid. Manages Template AI.',
+    tools:['sendgrid-api','drip-sequences','analytics','bounce-handling'] },
+  { id:'content',  label:'CONTENIDO',  sub:'Content AI',         color:'#CC44FF', x:1160, y:538, status:'online',
+    role:'Oversees all Meta content. Coordinates Image AI and Video AI sub-agents for campaigns.',
+    tools:['meta-graph-api','content-calendar','image-ai','video-ai'] },
+  { id:'template', label:'TEMPLATE AI',sub:'Sub · Email',        color:'#FF88CC', x:398, y:692, status:'idle',
+    role:'Designs premium HTML email templates with high-end design skills. Sub-agent of Email AI.',
+    tools:['ui-ux-pro-max','high-end-visual-design','minimalist-ui','full-output-enforcement'] },
+  { id:'image',    label:'IMAGE AI',   sub:'Sub · Fotos IG & Reels', color:'#AA33FF', x:952, y:668, status:'idle',
+    role:'Generates Instagram photos at 1080×1080, 1350, and 1920. Sub-agent of Content AI.',
+    tools:['nano-banana','image-taste-frontend','09-product-360','11-social-hook'] },
+  { id:'video',    label:'VIDEO AI',   sub:'Sub · Reels Cinemat.',color:'#8822DD', x:1285, y:692, status:'idle',
+    role:'Creates cinematic Reels in 9:16. Beat-synced visuals and product showcases. Sub-agent of Content AI.',
+    tools:['01-cinematic','11-social-hook','10-music-video','02-3d-cgi'] },
+  { id:'diego',    label:'DIEGO',      sub:'Agency Owner',       color:'#E8720C', x:618, y:750, isHuman:true, status:'present',
+    role:'Founder of WEBBSITE. Assigns tasks to Manager AI and manages all client relationships.',
+    tools:['task-assign','client-relations','sales','strategy'] },
+  { id:'nelson',   label:'NELSON',     sub:'Creative Director',  color:'#C8A870', x:762, y:750, isHuman:true, status:'present',
+    role:'Design and content strategy. Works alongside Diego to guide AI agents on brand direction.',
+    tools:['content-strategy','design-review','brand-guidelines','campaign-planning'] }
+];
+
+// ── Connections ──────────────────────────────────────────────────────────────
+const VEINS = [
+  { from:'manager', to:'whatsapp', color:'#25D366', w:2.8 },
+  { from:'manager', to:'email',    color:'#FF44AA', w:2.8 },
+  { from:'manager', to:'content',  color:'#CC44FF', w:2.8 },
+  { from:'email',   to:'template', color:'#FF88CC', w:1.8 },
+  { from:'content', to:'image',    color:'#AA33FF', w:1.8 },
+  { from:'content', to:'video',    color:'#8822DD', w:1.8 },
+  { from:'diego',   to:'manager',  color:'#E8720C', w:1.4 },
+  { from:'nelson',  to:'manager',  color:'#E8720C', w:1.4 },
+  { from:'diego',   to:'whatsapp', color:'#E8720C', w:1.1 },
+  { from:'nelson',  to:'email',    color:'#E8720C', w:1.1 },
+  { from:'diego',   to:'content',  color:'#E8720C', w:1.1 },
+  { from:'nelson',  to:'content',  color:'#E8720C', w:1.1 },
+];
+
+// ── Seeded RNG ────────────────────────────────────────────────────────────────
+function rng(seed) {
+  let s=seed|0;
+  return ()=>{
+    s=s+0x6D2B79F5|0;
+    let t=Math.imul(s^s>>>15,1|s);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+
+// ── Vein path (organic polyline, stable) ─────────────────────────────────────
+const AMAP = Object.fromEntries(AGENTS.map(a=>[a.id,a]));
+
+function veinAnchor(a) {
+  if (a.isManager) return { x:a.x, y:a.y+75 };
+  return { x:a.x, y:a.y+18 };
+}
+
+function makeVeinPts(f, t2, seed) {
+  const r=rng(seed);
+  const steps=10;
+  const pts=[];
+  for (let i=0;i<=steps;i++) {
+    const tt=i/steps;
+    const bx=f.x+(t2.x-f.x)*tt;
+    const by=f.y+(t2.y-f.y)*tt;
+    const amp=Math.sin(tt*Math.PI)*26;
+    pts.push({ x:bx+(r()-0.5)*2*amp, y:by+(r()-0.5)*2*amp });
+  }
+  pts[0]={ x:f.x, y:f.y };
+  pts[steps]={ x:t2.x, y:t2.y };
+  return pts;
+}
+
+const VPATHS = VEINS.map((v,i)=>{
+  const f=AMAP[v.from], t2=AMAP[v.to];
+  return makeVeinPts(veinAnchor(f), veinAnchor(t2), i*13579+24680);
+});
+
+// ── Traveling dots ────────────────────────────────────────────────────────────
+const DOTS = VEINS.map((_,i)=>({ vi:i, t:Math.random(), speed:0.0014+Math.random()*0.0028 }));
+
+// ── Hit areas ─────────────────────────────────────────────────────────────────
+let HITS=[];
+function buildHits() {
+  HITS=AGENTS.map(a=>{
+    if (a.isManager) return { a, x:a.x-84, y:a.y-76, w:168, h:152 };
+    return { a, x:a.x-32, y:a.y-52, w:64, h:96 };
+  });
+}
+
+// ── Background ────────────────────────────────────────────────────────────────
+function drawBackground(tick) {
+  // base gradient
+  const bg=ctx.createLinearGradient(0,0,0,RH);
+  bg.addColorStop(0,'#080612');
+  bg.addColorStop(0.52,'#0D0A1C');
+  bg.addColorStop(0.68,'#0A0816');
+  bg.addColorStop(1,'#040308');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,RW,RH);
+
+  // stone wall grid (top 62%)
+  const wallH=RH*0.62;
+  ctx.strokeStyle='rgba(255,255,255,0.033)'; ctx.lineWidth=1;
+  for (let x=0;x<RW;x+=52) {
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,wallH); ctx.stroke();
+  }
+  for (let y=0;y<wallH;y+=52) {
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(RW,y); ctx.stroke();
+  }
+
+  // floor vignette
+  const fv=ctx.createLinearGradient(0,wallH*0.82,0,RH);
+  fv.addColorStop(0,'rgba(0,0,0,0)');
+  fv.addColorStop(0.4,'rgba(4,3,10,0.55)');
+  fv.addColorStop(1,'rgba(2,1,6,0.88)');
+  ctx.fillStyle=fv; ctx.fillRect(0,wallH*0.82,RW,RH*0.35);
+
+  // edges vignette
+  const ev=ctx.createRadialGradient(RW/2,RH/2,RH*0.28,RW/2,RH/2,RH*0.88);
+  ev.addColorStop(0,'rgba(0,0,0,0)');
+  ev.addColorStop(1,'rgba(0,0,0,0.40)');
+  ctx.fillStyle=ev; ctx.fillRect(0,0,RW,RH);
+
+  // windows
+  drawWindow(222,38,tick,0);
+  drawWindow(700,38,tick,1);
+  drawWindow(1178,38,tick,2);
+
+  // lanterns
+  drawLantern(50,348,tick,0);
+  drawLantern(1350,348,tick,1);
+}
+
+function drawWindow(cx,topY,tick,idx) {
+  const ph=idx*1.85, fl=0.70+Math.sin(tick*0.044+ph)*0.16;
+  const ww=62, wh=112;
+
+  // outer glow
+  const og=ctx.createRadialGradient(cx,topY+wh*0.42,0,cx,topY+wh*0.42,ww*3.0);
+  og.addColorStop(0,`rgba(38,98,210,${(0.26*fl).toFixed(2)})`);
+  og.addColorStop(1,'rgba(38,98,210,0)');
+  ctx.fillStyle=og; ctx.fillRect(cx-ww*3.2,topY-wh*0.3,ww*6.4,wh*2.6);
+
+  // arch dark frame
+  ctx.fillStyle='#070512';
+  ctx.beginPath();
+  ctx.moveTo(cx-ww/2,topY+wh*0.88);
+  ctx.lineTo(cx-ww/2,topY+wh*0.32);
+  ctx.quadraticCurveTo(cx-ww/2,topY,cx,topY);
+  ctx.quadraticCurveTo(cx+ww/2,topY,cx+ww/2,topY+wh*0.32);
+  ctx.lineTo(cx+ww/2,topY+wh*0.88);
+  ctx.closePath(); ctx.fill();
+
+  // glass pane
+  ctx.save();
+  const pw=ww-12, bot=topY+wh*0.85;
+  ctx.beginPath();
+  ctx.moveTo(cx-pw/2,bot);
+  ctx.lineTo(cx-pw/2,topY+wh*0.30);
+  ctx.quadraticCurveTo(cx-pw/2,topY+11,cx,topY+11);
+  ctx.quadraticCurveTo(cx+pw/2,topY+11,cx+pw/2,topY+wh*0.30);
+  ctx.lineTo(cx+pw/2,bot);
+  ctx.closePath();
+  const pg=ctx.createLinearGradient(cx,topY+11,cx,bot);
+  pg.addColorStop(0,`rgba(110,200,255,${(0.68*fl).toFixed(2)})`);
+  pg.addColorStop(0.45,`rgba(40,100,200,${(0.50*fl).toFixed(2)})`);
+  pg.addColorStop(1,`rgba(18,44,130,${(0.28*fl).toFixed(2)})`);
+  ctx.fillStyle=pg; ctx.fill();
+  // cross dividers
+  ctx.strokeStyle='rgba(0,0,0,0.60)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(cx,topY+13); ctx.lineTo(cx,bot); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-pw/2+2,topY+wh*0.47); ctx.lineTo(cx+pw/2-2,topY+wh*0.47); ctx.stroke();
+  ctx.restore();
+
+  // arch outline
+  ctx.strokeStyle='rgba(0,0,0,0.88)'; ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(cx-ww/2,topY+wh*0.88);
+  ctx.lineTo(cx-ww/2,topY+wh*0.32);
+  ctx.quadraticCurveTo(cx-ww/2,topY,cx,topY);
+  ctx.quadraticCurveTo(cx+ww/2,topY,cx+ww/2,topY+wh*0.32);
+  ctx.lineTo(cx+ww/2,topY+wh*0.88);
+  ctx.stroke();
+}
+
+function drawLantern(x,y,tick,idx) {
+  const ph=idx*2.5, fl=0.80+Math.sin(tick*0.12+ph)*0.20;
+
+  // wall bracket
+  ctx.strokeStyle='#2C1806'; ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(idx===0?0:RW, y-22);
+  ctx.quadraticCurveTo(idx===0?x+18:x-18,y-22,x,y-12);
+  ctx.stroke();
+
+  // glow pool
+  const gg=ctx.createRadialGradient(x,y+6,0,x,y+6,58);
+  gg.addColorStop(0,`rgba(220,120,10,${(0.30*fl).toFixed(2)})`);
+  gg.addColorStop(1,'rgba(220,120,10,0)');
+  ctx.fillStyle=gg; ctx.fillRect(x-58,y-22,116,72);
+
+  // lantern box
+  ctx.fillStyle='#221404'; ctx.fillRect(x-9,y-14,18,24);
+  ctx.strokeStyle='#5A3010'; ctx.lineWidth=1.5; ctx.strokeRect(x-9,y-14,18,24);
+
+  // inner light
+  const lg=ctx.createRadialGradient(x,y,0,x,y,11);
+  lg.addColorStop(0,`rgba(255,185,30,${(0.88*fl).toFixed(2)})`);
+  lg.addColorStop(1,'rgba(255,185,30,0)');
+  ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(x,y,11,0,Math.PI*2); ctx.fill();
+
+  // flame
+  ctx.save(); ctx.translate(x,y-4);
+  const ff=0.85+Math.sin(tick*0.19+ph)*0.15;
+  ctx.fillStyle=`rgba(255,210,40,${ff.toFixed(2)})`;
+  ctx.beginPath();
+  ctx.moveTo(0,-10);
+  ctx.bezierCurveTo(-3+Math.sin(tick*0.13+ph)*2,-7,-2.5,-2,0,0);
+  ctx.bezierCurveTo(2.5,-2,3+Math.sin(tick*0.13+ph)*2,-7,0,-10);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── Pixel art character ───────────────────────────────────────────────────────
+function drawChar(x, y, color) {
+  const p=3.8;
+  ctx.fillStyle=color;
+  // head
+  ctx.fillRect(x-p*1.6,y-p*8,p*3.2,p*3.2);
+  // eyes
+  ctx.fillStyle='rgba(0,0,0,0.65)';
+  ctx.fillRect(x-p*0.95,y-p*7.3,p*0.7,p*0.7);
+  ctx.fillRect(x+p*0.25,y-p*7.3,p*0.7,p*0.7);
+  ctx.fillStyle=color;
+  // body
+  ctx.fillRect(x-p*2.2,y-p*4.8,p*4.4,p*4.2);
+  // shade body right half
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  ctx.fillRect(x,y-p*4.8,p*2.2,p*4.2);
+  ctx.fillStyle=color;
+  // arms
+  ctx.fillRect(x-p*3.8,y-p*4.8,p*1.6,p*3.0);
+  ctx.fillRect(x+p*2.2,y-p*4.8,p*1.6,p*3.0);
+  // legs
+  ctx.fillRect(x-p*1.8,y-p*0.6,p*1.5,p*3.5);
+  ctx.fillRect(x+p*0.3,y-p*0.6,p*1.5,p*3.5);
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  ctx.fillRect(x+p*0.3,y-p*0.6,p*1.5,p*3.5);
+}
+
+// ── Terminal desk ─────────────────────────────────────────────────────────────
+function drawDesk(x, y, color) {
+  ctx.fillStyle='#141020';
+  ctx.strokeStyle=color; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.rect(x-24,y,48,30); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=color; ctx.globalAlpha=0.45;
+  ctx.fillRect(x-19,y+5,26,2.5);
+  ctx.fillRect(x-19,y+11,17,2);
+  ctx.fillRect(x-19,y+17,21,2);
+  ctx.globalAlpha=1;
+  ctx.beginPath(); ctx.arc(x+16,y+6,3,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.fill();
+}
+
+// ── Manager panel ─────────────────────────────────────────────────────────────
+function drawManagerPanel(a, tick) {
+  const cx=a.x, cy=a.y;
+  const pw=168, ph=152;
+  const x=cx-pw/2, y=cy-ph/2;
+
+  // background
+  ctx.fillStyle='#0A0618'; ctx.fillRect(x,y,pw,ph);
+
+  // orange glow border
+  ctx.save();
+  ctx.shadowColor='#E8720C'; ctx.shadowBlur=16;
+  ctx.strokeStyle='#E8720C'; ctx.lineWidth=2.5;
+  ctx.strokeRect(x,y,pw,ph);
+  ctx.restore();
+
+  // inner border
+  ctx.strokeStyle='rgba(232,114,12,0.20)'; ctx.lineWidth=1;
+  ctx.strokeRect(x+5,y+5,pw-10,ph-10);
+
+  // title
+  ctx.fillStyle='#E8720C';
+  ctx.font='bold 8.5px "Courier New",monospace';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('// MANAGER AI //', cx, y+10);
+
+  // character
+  drawChar(cx, y+ph*0.64, '#E8720C');
+
+  // crown (3 gold dots above head)
+  ctx.fillStyle='#FFD040';
+  ctx.fillRect(cx-9,y+ph*0.64-32,4,4);
+  ctx.fillRect(cx-2,y+ph*0.64-36,4,4);
+  ctx.fillRect(cx+5,y+ph*0.64-32,4,4);
+
+  // status dots
+  const dc=['#25D366','#FF44AA','#CC44FF','#E8720C','#AA33FF','#FF88CC'];
+  const dsp=pw/(dc.length+1);
+  for (let i=0;i<dc.length;i++) {
+    const fl=0.35+0.65*Math.abs(Math.sin(tick*0.07+i*0.95));
+    ctx.globalAlpha=fl;
+    ctx.beginPath(); ctx.arc(x+dsp*(i+1),y+ph-15,5,0,Math.PI*2);
+    ctx.fillStyle=dc[i]; ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  // corner brackets
+  const bl=13;
+  ctx.strokeStyle='#E8720C'; ctx.lineWidth=1.8;
+  [[x,y,1,1],[x+pw,y,-1,1],[x,y+ph,1,-1],[x+pw,y+ph,-1,-1]].forEach(([bx,by,sx,sy])=>{
+    ctx.beginPath();
+    ctx.moveTo(bx+sx*bl,by); ctx.lineTo(bx,by); ctx.lineTo(bx,by+sy*bl);
+    ctx.stroke();
+  });
+}
+
+// ── Draw veins ────────────────────────────────────────────────────────────────
+function drawVeins(tick) {
+  for (let vi=0;vi<VEINS.length;vi++) {
+    const v=VEINS[vi], pts=VPATHS[vi];
+    ctx.lineCap='round'; ctx.lineJoin='round';
+
+    // glow
+    ctx.globalAlpha=0.13;
+    ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+    ctx.strokeStyle=v.color; ctx.lineWidth=v.w+9; ctx.stroke();
+
+    // main
+    ctx.globalAlpha=0.68;
+    ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+    ctx.strokeStyle=v.color; ctx.lineWidth=v.w; ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+
+  // traveling dots
+  for (const dot of DOTS) {
+    const v=VEINS[dot.vi], pts=VPATHS[dot.vi];
+    const seg=Math.min(Math.floor(dot.t*(pts.length-1)),pts.length-2);
+    const st=dot.t*(pts.length-1)-seg;
+    const p0=pts[seg], p1=pts[seg+1];
+    const px=p0.x+(p1.x-p0.x)*st, py=p0.y+(p1.y-p0.y)*st;
+
+    const dg=ctx.createRadialGradient(px,py,0,px,py,11);
+    dg.addColorStop(0,v.color+'BB'); dg.addColorStop(1,v.color+'00');
+    ctx.fillStyle=dg; ctx.beginPath(); ctx.arc(px,py,11,0,Math.PI*2); ctx.fill();
+
+    ctx.fillStyle='#fff'; ctx.globalAlpha=0.90;
+    ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+
+    dot.t+=dot.speed;
+    if (dot.t>=1) dot.t=0;
+  }
+}
+
+// ── Draw agent ────────────────────────────────────────────────────────────────
+function drawAgent(a, tick) {
+  if (a.isManager) { drawManagerPanel(a,tick); return; }
+
+  // sub-agent badge
+  if (a.sub.startsWith('Sub')) {
+    const bw=140;
+    ctx.fillStyle='rgba(8,6,18,0.85)';
+    ctx.strokeStyle=a.color; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.rect(a.x-bw/2,a.y-78,bw,16); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=a.color;
+    ctx.font='7.5px "Courier New",monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('· '+a.sub.toUpperCase()+' ·', a.x, a.y-70);
+  }
+
+  // pulse ring
+  if (a.status==='online'||a.status==='present') {
+    const pulse=(Math.sin(tick*0.055+a.x*0.009)*0.5+0.5);
+    ctx.globalAlpha=0.07+pulse*0.09;
+    ctx.beginPath(); ctx.arc(a.x,a.y+6,30+pulse*9,0,Math.PI*2);
+    ctx.strokeStyle=a.color; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+
+  // character
+  drawChar(a.x, a.y-10, a.color);
+
+  // desk
+  drawDesk(a.x, a.y+20, a.color);
+
+  // name
+  ctx.fillStyle=a.color;
+  ctx.font='bold 9.5px "Courier New",monospace';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(a.label.toUpperCase(), a.x, a.y+54);
+
+  // sub-title for non-sub agents
+  if (!a.sub.startsWith('Sub')) {
+    ctx.fillStyle='rgba(180,160,220,0.28)';
+    ctx.font='7.5px "Courier New",monospace';
+    ctx.fillText(a.sub.toLowerCase(), a.x, a.y+67);
+  }
+}
+
+// ── Interaction ───────────────────────────────────────────────────────────────
+let active=null;
+
+function openPanel(a) {
+  if (active===a.id) { closePanel(); return; }
+  active=a.id;
+  const sl={online:'Online',idle:'Idle',present:'Present'};
+  const bc={online:'bon',idle:'bid',present:'bpr'};
+  document.getElementById('pc').innerHTML=`
+    <div class="pn">${a.label}</div>
+    <div class="ps">${a.sub}</div>
+    <span class="pb ${bc[a.status]}"><span class="bd"></span>${sl[a.status]}</span>
+    <div class="psec">Role</div>
+    <div class="pr">${a.role}</div>
+    <hr class="pdiv">
+    <div class="psec">Tools &amp; Integrations</div>
+    <div class="pts">${a.tools.map(t=>`<span class="pt">${t}</span>`).join('')}</div>`;
+  document.getElementById('panel').classList.add('open');
+}
+function closePanel() {
+  active=null;
+  document.getElementById('panel').classList.remove('open');
+}
+
+canvas.addEventListener('click', e=>{
+  const r=canvas.getBoundingClientRect();
+  const mx=(e.clientX-r.left-OX)/SC, my=(e.clientY-r.top-OY)/SC;
+  for (const h of HITS) {
+    if (mx>=h.x&&mx<=h.x+h.w&&my>=h.y&&my<=h.y+h.h) { openPanel(h.a); return; }
+  }
+  closePanel();
+});
+canvas.addEventListener('mousemove', e=>{
+  const r=canvas.getBoundingClientRect();
+  const mx=(e.clientX-r.left-OX)/SC, my=(e.clientY-r.top-OY)/SC;
+  canvas.style.cursor=HITS.some(h=>mx>=h.x&&mx<=h.x+h.w&&my>=h.y&&my<=h.y+h.h)?'pointer':'default';
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePanel(); });
+
+// ── Main loop ─────────────────────────────────────────────────────────────────
+let tick=0;
+function frame() {
+  tick++;
+  ctx.setTransform(SC,0,0,SC,OX,OY);
+  ctx.clearRect(-OX/SC,-OY/SC,W/SC,H/SC);
+  drawBackground(tick);
+  drawVeins(tick);
+  const sorted=[...AGENTS].sort((a,b)=>a.y-b.y);
+  for (const a of sorted) drawAgent(a,tick);
+  ctx.setTransform(1,0,0,1,0,0);
+  requestAnimationFrame(frame);
+}
+
+resize();
+frame();
+</script>
+</body>
+</html>
