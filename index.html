@@ -39,6 +39,20 @@ canvas { display:block;width:100vw;height:100vh; }
 }
 .lr { display:flex;align-items:center;gap:7px;font-size:9.5px;color:#3A2810;letter-spacing:1px; }
 .ld { width:24px;height:2.5px;border-radius:2px; }
+
+#lang-toggle {
+  position:fixed;top:14px;right:14px;z-index:200;
+  background:rgba(6,4,14,.90);border:1px solid rgba(180,130,50,.12);
+  border-radius:5px;padding:4px 6px;display:flex;align-items:center;gap:2px;
+  font-family:'Courier New',monospace;
+}
+#lang-toggle button {
+  background:none;border:none;color:#3A2810;font-size:10px;
+  letter-spacing:1.5px;padding:2px 8px;cursor:pointer;font-family:inherit;
+}
+#lang-toggle button.active { color:#D4A840; }
+#lang-toggle button:hover:not(.active) { color:#8A6830; }
+#lang-toggle .sep { color:rgba(58,40,16,0.35);font-size:10px; }
 </style>
 </head>
 <body>
@@ -49,6 +63,11 @@ canvas { display:block;width:100vw;height:100vh; }
   <div class="lr"><div class="ld" style="background:#FF44AA"></div>EMAIL</div>
   <div class="lr"><div class="ld" style="background:#CC44FF"></div>CONTENIDO</div>
   <div class="lr"><div class="ld" style="background:#E8720C"></div>HUMANOS</div>
+</div>
+<div id="lang-toggle">
+  <button data-lang="en" onclick="setLang('en')">EN</button>
+  <span class="sep">|</span>
+  <button data-lang="es" onclick="setLang('es')">ES</button>
 </div>
 
 <script>
@@ -68,6 +87,43 @@ function resize() {
   buildHits();
 }
 window.addEventListener('resize', resize);
+
+// ── Language ─────────────────────────────────────────────────────────────────
+let lang=localStorage.getItem('lang')||'en';
+const TRANSLATIONS={
+  en:{
+    legend:['WHATSAPP','EMAIL','CONTENT','HUMANS'],
+    status:{online:'Online',idle:'Idle',present:'Present'},
+    panel:{role:'Role',tools:'Tools &amp; Integrations'},
+    agents:{
+      manager: {label:'MANAGER AI', sub:'Orchestrator',          role:'Orchestrates all agents. Routes tasks from Diego & Nelson to the right agent based on priority.'},
+      whatsapp:{label:'WHATSAPP',   sub:'WhatsApp AI',           role:'Client messaging, lead qualification and follow-up sequences via WhatsApp Business API.'},
+      email:   {label:'EMAIL AI',   sub:'Email Automation',      role:'Email automation, drip sequences and campaign analytics via SendGrid. Manages Template AI.'},
+      content: {label:'CONTENIDO',  sub:'Content AI',            role:'Oversees all Meta content. Coordinates Image AI and Video AI sub-agents for campaigns.'},
+      template:{label:'TEMPLATE AI',sub:'Sub · Email',           role:'Designs premium HTML email templates with high-end design skills. Sub-agent of Email AI.'},
+      image:   {label:'IMAGE AI',   sub:'Sub · IG Photos & Reels',role:'Generates Instagram photos at 1080×1080, 1350, and 1920. Sub-agent of Content AI.'},
+      video:   {label:'VIDEO AI',   sub:'Sub · Cinematic Reels', role:'Creates cinematic Reels in 9:16. Beat-synced visuals and product showcases. Sub-agent of Content AI.'},
+      diego:   {label:'DIEGO',      sub:'Agency Owner',          role:'Founder of WEBBSITE. Assigns tasks to Manager AI and manages all client relationships.'},
+      nelson:  {label:'NELSON',     sub:'Creative Director',     role:'Design and content strategy. Works alongside Diego to guide AI agents on brand direction.'}
+    }
+  },
+  es:{
+    legend:['WHATSAPP','EMAIL','CONTENIDO','HUMANOS'],
+    status:{online:'En línea',idle:'Inactivo',present:'Presente'},
+    panel:{role:'Rol',tools:'Herramientas e Integraciones'},
+    agents:{
+      manager: {label:'MANAGER AI', sub:'Orquestador',            role:'Orquesta todos los agentes. Enruta tareas de Diego y Nelson al agente correcto según prioridad.'},
+      whatsapp:{label:'WHATSAPP',   sub:'IA de WhatsApp',         role:'Mensajería con clientes, calificación de leads y secuencias de seguimiento vía WhatsApp Business API.'},
+      email:   {label:'EMAIL AI',   sub:'Automatización Email',   role:'Automatización de correos, secuencias drip y analíticas de campañas vía SendGrid. Gestiona Template AI.'},
+      content: {label:'CONTENIDO',  sub:'IA de Contenido',        role:'Supervisa todo el contenido de Meta. Coordina los sub-agentes Image AI y Video AI para campañas.'},
+      template:{label:'TEMPLATE AI',sub:'Sub · Email',            role:'Diseña plantillas HTML de correo premium con habilidades de diseño de alto nivel. Sub-agente de Email AI.'},
+      image:   {label:'IMAGE AI',   sub:'Sub · Fotos IG & Reels', role:'Genera fotos de Instagram en 1080×1080, 1350 y 1920. Sub-agente de Content AI.'},
+      video:   {label:'VIDEO AI',   sub:'Sub · Reels Cinemat.',   role:'Crea Reels cinematográficos en 9:16. Visuales sincronizados con música y showcases de productos. Sub-agente de Content AI.'},
+      diego:   {label:'DIEGO',      sub:'Dueño de Agencia',       role:'Fundador de WEBBSITE. Asigna tareas al Manager AI y gestiona todas las relaciones con clientes.'},
+      nelson:  {label:'NELSON',     sub:'Director Creativo',      role:'Estrategia de diseño y contenido. Trabaja junto a Diego para guiar a los agentes en la dirección de marca.'}
+    }
+  }
+};
 
 // ── Agents ──────────────────────────────────────────────────────────────────
 const AGENTS = [
@@ -366,7 +422,7 @@ function drawManagerPanel(a, tick) {
   ctx.fillStyle='#E8720C';
   ctx.font='bold 8.5px "Courier New",monospace';
   ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillText('// MANAGER AI //', cx, y+10);
+  ctx.fillText('// '+TRANSLATIONS[lang].agents.manager.label+' //', cx, y+10);
 
   // character
   drawChar(cx, y+ph*0.64, '#E8720C');
@@ -444,7 +500,8 @@ function drawAgent(a, tick) {
   if (a.isManager) { drawManagerPanel(a,tick); return; }
 
   // sub-agent badge
-  if (a.sub.startsWith('Sub')) {
+  const tsub=TRANSLATIONS[lang].agents[a.id].sub;
+  if (tsub.startsWith('Sub')) {
     const bw=140;
     ctx.fillStyle='rgba(8,6,18,0.85)';
     ctx.strokeStyle=a.color; ctx.lineWidth=0.9;
@@ -452,7 +509,7 @@ function drawAgent(a, tick) {
     ctx.fillStyle=a.color;
     ctx.font='7.5px "Courier New",monospace';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('· '+a.sub.toUpperCase()+' ·', a.x, a.y-70);
+    ctx.fillText('· '+tsub.toUpperCase()+' ·', a.x, a.y-70);
   }
 
   // pulse ring
@@ -471,41 +528,58 @@ function drawAgent(a, tick) {
   drawDesk(a.x, a.y+20, a.color);
 
   // name
+  const tlabel=TRANSLATIONS[lang].agents[a.id].label;
   ctx.fillStyle=a.color;
   ctx.font='bold 9.5px "Courier New",monospace';
   ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillText(a.label.toUpperCase(), a.x, a.y+54);
+  ctx.fillText(tlabel.toUpperCase(), a.x, a.y+54);
 
   // sub-title for non-sub agents
-  if (!a.sub.startsWith('Sub')) {
+  if (!tsub.startsWith('Sub')) {
     ctx.fillStyle='rgba(180,160,220,0.28)';
     ctx.font='7.5px "Courier New",monospace';
-    ctx.fillText(a.sub.toLowerCase(), a.x, a.y+67);
+    ctx.fillText(tsub.toLowerCase(), a.x, a.y+67);
   }
 }
 
 // ── Interaction ───────────────────────────────────────────────────────────────
 let active=null;
 
+function renderPanel(a) {
+  const T=TRANSLATIONS[lang], at=T.agents[a.id];
+  const bc={online:'bon',idle:'bid',present:'bpr'};
+  document.getElementById('pc').innerHTML=`
+    <div class="pn">${at.label}</div>
+    <div class="ps">${at.sub}</div>
+    <span class="pb ${bc[a.status]}"><span class="bd"></span>${T.status[a.status]}</span>
+    <div class="psec">${T.panel.role}</div>
+    <div class="pr">${at.role}</div>
+    <hr class="pdiv">
+    <div class="psec">${T.panel.tools}</div>
+    <div class="pts">${a.tools.map(t=>`<span class="pt">${t}</span>`).join('')}</div>`;
+}
 function openPanel(a) {
   if (active===a.id) { closePanel(); return; }
   active=a.id;
-  const sl={online:'Online',idle:'Idle',present:'Present'};
-  const bc={online:'bon',idle:'bid',present:'bpr'};
-  document.getElementById('pc').innerHTML=`
-    <div class="pn">${a.label}</div>
-    <div class="ps">${a.sub}</div>
-    <span class="pb ${bc[a.status]}"><span class="bd"></span>${sl[a.status]}</span>
-    <div class="psec">Role</div>
-    <div class="pr">${a.role}</div>
-    <hr class="pdiv">
-    <div class="psec">Tools &amp; Integrations</div>
-    <div class="pts">${a.tools.map(t=>`<span class="pt">${t}</span>`).join('')}</div>`;
+  renderPanel(a);
   document.getElementById('panel').classList.add('open');
 }
 function closePanel() {
   active=null;
   document.getElementById('panel').classList.remove('open');
+}
+function setLang(l) {
+  lang=l;
+  localStorage.setItem('lang',l);
+  document.documentElement.lang=l;
+  const colors=['#25D366','#FF44AA','#CC44FF','#E8720C'];
+  document.getElementById('legend').innerHTML=TRANSLATIONS[l].legend.map((lbl,i)=>
+    `<div class="lr"><div class="ld" style="background:${colors[i]}"></div>${lbl}</div>`
+  ).join('');
+  document.querySelectorAll('#lang-toggle button').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.lang===l);
+  });
+  if (active) { const a=AGENTS.find(ag=>ag.id===active); if(a) renderPanel(a); }
 }
 
 canvas.addEventListener('click', e=>{
@@ -537,6 +611,7 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
+setLang(lang);
 resize();
 frame();
 </script>
